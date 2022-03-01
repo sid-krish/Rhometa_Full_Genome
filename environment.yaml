@@ -1,0 +1,21 @@
+name: rhometa
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pandas
+  - biopython
+  - scipy
+  - future
+  - seq-gen
+  - bwa
+  - samtools=1.12
+  - lofreq
+  - pysam
+  - seaborn
+  - numba
+  - fastsimbac
+  - msprime>=1.1.0
