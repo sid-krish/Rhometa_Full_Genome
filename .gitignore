@@ -1,2 +1,19 @@
 
 .DS_Store
+
+.nextflow/
+
+.vscode/
+
+work/
+
+*.gz
+
+.nextflow.log
+
+.nextflow.log.*
+bin/__pycache__/
+
+bin/ldpop/__pycache__/
+
+Output/
