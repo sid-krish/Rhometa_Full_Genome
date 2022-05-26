@@ -17,3 +17,7 @@ bin/__pycache__/
 bin/ldpop/__pycache__/
 
 Output/
+
+*.csv
+
+*.png

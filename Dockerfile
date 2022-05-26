@@ -1,10 +1,20 @@
-FROM continuumio/miniconda3
+FROM continuumio/miniconda3:latest
 
-RUN apt-get update
-RUN apt-get dist-upgrade --yes
 RUN apt-get install -y procps
 
-RUN conda update conda --yes
-RUN conda install -c defaults -c bioconda -c conda-forge python numpy openblas pandas seaborn scipy future biopython numba fastsimbac seq-gen bwa lofreq pysam samtools=1.12 --yes
-RUN conda install -c conda-forge msprime>=1.1.0 --yes
-RUN conda clean --all --yes
+RUN conda update conda -y
+
+RUN conda install -c bioconda -c conda-forge -y \
+  'python>=3.9' \
+  biopython \
+  numpy=1.21 \
+  pandas \
+  scipy \
+  seaborn \
+  numba \
+  tqdm \
+  bcftools \
+  'pysam>=0.17' \
+  'freebayes>=1.3.5' \
+  'samtools>=1.15' \
+  'openssl>=1.1.1n'
