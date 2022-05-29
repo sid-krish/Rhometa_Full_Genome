@@ -29,7 +29,7 @@ df.sort_values(by="rho_for_estimator", inplace=True)
 #     theta = file.readline()
 
 with open("final_results.txt", 'w') as file:  # open in write mode (create new file)
-    file.write(f"Custom Full Genome Pairwise Recombination Rate Estimator\n")
+    file.write(f"Rhometa Full Genome Pairwise Recombination Rate Estimator\n")
     file.write(f"\n")
 
     file.write(f'-' * 56 + '\n')

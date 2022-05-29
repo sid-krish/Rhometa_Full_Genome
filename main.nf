@@ -135,6 +135,33 @@ process WATTERSON_ESTIMATE {
     """
 }
 
+
+process LOOKUP_TABLE_LDPOP {
+    // publishDir "Output", mode: "copy", saveAs: {filename -> "${prefix_filename}${filename}"}
+
+    input:
+        tuple val(prefix_filename),
+            val(theta_est),
+            val(sample_size_seq_len),
+            path("pairwise_biallelic_table.csv")
+
+    output:
+        tuple val(prefix_filename),
+            val(theta_est),
+            val(sample_size_seq_len),
+            path("pairwise_biallelic_table.csv"),
+            path("lookupTable.txt")
+
+    script:
+    // There are other parameters that can be adjusted, I've left them out for the time being
+    // also they mention twice muation and recom rate, for the mutation and recom parameters which I am unsure how to interpret
+    """
+    sample_size=\$(echo ${sample_size_seq_len} | cut -d',' -f1)
+    ldtable.py --cores $task.cpus -n \$sample_size -th ${theta_est} -rh ${params.lookup_grid} --approx > lookupTable.txt
+    """
+}
+
+
 process DOWNSAMPLED_LOOKUP_TABLE {
     // publishDir "Output", mode: "copy", saveAs: {filename -> "${prefix_filename}${filename}"}
 
@@ -144,7 +171,7 @@ process DOWNSAMPLED_LOOKUP_TABLE {
             val(sample_size_seq_len),
             path("pairwise_biallelic_table.csv")
         
-        val mutation_rate
+        val theta
         path downsampled_lookup_tables
         
 
@@ -158,7 +185,7 @@ process DOWNSAMPLED_LOOKUP_TABLE {
     script:
     """
     sample_size=\$(echo ${sample_size_seq_len} | cut -d',' -f1)
-    reformat_downsampled_lk_table.py lk_downsampled_\$sample_size.csv \$sample_size ${mutation_rate} ${params.ldpop_rho_range}
+    reformat_downsampled_lk_table.py lk_downsampled_\$sample_size.csv \$sample_size ${theta} ${params.lookup_grid}
     """
 }
 
@@ -209,7 +236,7 @@ process CUSTOM_HAP_SETS_AND_MERGE {
 
     script:
     """
-    custom_hap_sets_and_merge.py lookupTable.txt pairwise_biallelic_table.csv lookup_format.csv ${params.ldpop_rho_range} > table_ids_for_eq3.csv
+    custom_hap_sets_and_merge.py lookupTable.txt pairwise_biallelic_table.csv lookup_format.csv ${params.lookup_grid} > table_ids_for_eq3.csv
     """
 }
 
@@ -236,7 +263,7 @@ process P_IJ_GRID {
     script:
     """
     genome_len=\$(echo ${sample_size_seq_len} | cut -d',' -f2)
-    pij_grid_vectorised.py \$genome_len ${params.recom_tract_len} ${params.ldpop_rho_range} eq3.csv
+    pij_grid_vectorised.py \$genome_len ${params.recom_tract_len} ${params.lookup_grid} eq3.csv
     """
 }
 
@@ -259,14 +286,14 @@ process PAIRWISE_ESTIMATOR {
     
     script:
     """
-    pairwise_rho_estimator_intp_rect_biv.py eq3.csv table_ids_for_eq3.csv p_ij_grid.csv lookupTable.txt ${params.ldpop_rho_range}
+    pairwise_rho_estimator_intp_rect_biv.py eq3.csv table_ids_for_eq3.csv p_ij_grid.csv lookupTable.txt ${params.lookup_grid}
     """
 
 }
 
 
 process FINAL_RESULTS {
-    // publishDir "Output", mode: "copy", saveAs: {filename -> "${prefix_filename}${filename}"}
+    publishDir "Output", mode: "copy", saveAs: {filename -> "${prefix_filename}${filename}"}
 
     input:
         tuple val(prefix_filename),
@@ -275,6 +302,7 @@ process FINAL_RESULTS {
 
     output:
         tuple val(prefix_filename),
+            val(theta_est),
             path("final_results.txt")
 
     script:
@@ -289,14 +317,17 @@ process PROCESS_OUTPUT{
 
     input:
         tuple val(prefix_filename),
+            val(theta_est),
             path("final_results.txt")
 
     output:
         path "processed_results.csv", emit: processed_results_csv
+        path "theta_est.csv", emit: theta_est_csv
 
     script:
         """
         custom_est_process_output.py final_results.txt
+        echo ${theta_est} > theta_est.csv
         """
 
 }
@@ -326,14 +357,14 @@ workflow {
     // Note: Channels can be called unlimited number of times in DSL2
     // A process component can be invoked only once in the same workflow context
 
-    params.mutation_rate = 0.01 // scaled theta
+    // params.theta = 0.01 // scaled theta
     params.recom_tract_len = 1000
-    params.ldpop_rho_range = "101,100"
+    params.lookup_grid = "101,100" // The range of rho values used to generate lookup tables
 
-    params.prefix_filename = 'none'
+    params.prefix_filename = 'none' // prefix string to output filenames to help distinguish runs
     params.input_fasta = 'none'
     // params.lookup_tables = "Lookup_tables"
-    params.lookup_tables = "/Volumes/Backup/Lookup_tables/Lookup_tables_m_0.01_r_0-100"
+    // params.lookup_tables = "/Volumes/Backup/Lookup_tables/Lookup_tables_m_0.01_r_0-100"
     // params.lookup_tables = "/shared/homes/11849395/Lookup_tables/Lookup_tables_0-100"
 
     // Input verification
@@ -344,7 +375,7 @@ workflow {
 
     // Channels
     input_fasta_channel = Channel.fromPath( params.input_fasta )
-    downsampled_lookup_tables = Channel.fromPath( "${params.lookup_tables}/lk_downsampled_*.csv" ).collect()
+    // downsampled_lookup_tables = Channel.fromPath( "${params.lookup_tables}/lk_downsampled_*.csv" ).collect()
 
     // For each process there is a output of tuple with the params that change + necessary files/values  to move forward until they are no longer need
     PREFIX_FILENAME(input_fasta_channel, params.prefix_filename)
@@ -359,9 +390,11 @@ workflow {
 
     WATTERSON_ESTIMATE(PAIRWISE_BIALLELIC_TABLE.out)
 
-    DOWNSAMPLED_LOOKUP_TABLE(WATTERSON_ESTIMATE.out, params.mutation_rate, downsampled_lookup_tables)
+    LOOKUP_TABLE_LDPOP(WATTERSON_ESTIMATE.out)
 
-    PAIRWISE_LOOKUP_FORMAT(DOWNSAMPLED_LOOKUP_TABLE.out)
+    // DOWNSAMPLED_LOOKUP_TABLE(WATTERSON_ESTIMATE.out, params.theta, downsampled_lookup_tables)
+
+    PAIRWISE_LOOKUP_FORMAT(LOOKUP_TABLE_LDPOP.out)
 
     CUSTOM_HAP_SETS_AND_MERGE(PAIRWISE_LOOKUP_FORMAT.out)
 
